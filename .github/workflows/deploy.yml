@@ -1,0 +1,65 @@
+name: Deploy stacks
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  deploy-airflow-stack:
+    name: Deploy Airflow stack to AWS
+    runs-on: ubuntu-latest
+    outputs:
+      airflow-ui: ${{ steps.airflow-stack.outputs.AirflowUI }}
+    steps:
+    - name: checkout
+      uses: actions/checkout@v2
+
+    - name: Configure AWS credentials
+      id: creds
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: eu-west-1
+
+    - name: Deploy main infra stack
+      id: infra-stack
+      uses: aws-actions/aws-cloudformation-github-deploy@v1
+      with:
+        name: Infra
+        template: infra-template.yml
+        no-fail-on-empty-changeset: '1'
+
+    - name: Deploy Airflow artifacts
+      id: airflow-artifacts
+      run: |
+        aws s3 sync airflow s3://${{ steps.infra-stack.outputs.InfraBucketName }}/airflow --delete
+
+    - name: Get latest requirements version
+      id: requirements
+      run: |
+        REQUIREMENTS_VERSION=`aws s3api list-object-versions --bucket ${{ steps.infra-stack.outputs.InfraBucketName }} --prefix airflow/requirements.txt --query 'Versions[?IsLatest].[VersionId]' --output text`
+        echo "Latest requirements.txt version: $REQUIREMENTS_VERSION"
+        echo "::set-output name=version::$REQUIREMENTS_VERSION"
+
+    - name: Deploy Airflow environment
+      id: airflow-stack
+      uses: aws-actions/aws-cloudformation-github-deploy@v1
+      with:
+        name: Airflow
+        template: airflow-template.yml
+        no-fail-on-empty-changeset: '1'
+        parameter-overrides: >-
+          RequirementsVersion=${{ steps.requirements.outputs.version }}
+
+    - name: Deploy Glue Job
+      id: glue-job-stack
+      uses: aws-actions/aws-cloudformation-github-deploy@v1
+      with:
+        name: DynamoDbToS3EtlJob
+        template: glue-etl/job-template.yml
+        no-fail-on-empty-changeset: '1'
