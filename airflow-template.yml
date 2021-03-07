@@ -3,11 +3,6 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: Airflow environment
 
 Parameters:
-  VpcCidr:
-    Description: VPC CIDR block
-    Type: String
-    Default: 10.192.0.0/16
-
   AirflowPrivateSubnetCidrBlocks:
     Description: Comma delimited list of CIDR blocks which should be chosen for creating private Airflow subnets.
     Type: CommaDelimitedList
@@ -18,36 +13,17 @@ Parameters:
     Type: CommaDelimitedList
     Default: 10.192.20.0/24, 10.192.21.0/24
 
+  RequirementsVersion:
+    Description: Latest version of reqiurements.txt file
+    Type: String
+
 Resources:
-  VPC:
-    Type: AWS::EC2::VPC
-    Properties:
-      CidrBlock: !Ref VpcCidr
-      EnableDnsSupport: true
-      EnableDnsHostnames: true
-      Tags:
-        - Key: Name
-          Value: Airflow VPC
-
-  InternetGateway:
-    Type: AWS::EC2::InternetGateway
-    Properties:
-      Tags:
-        - Key: Name
-          Value: Airflow IG
-
-  InternetGatewayAttachment:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      InternetGatewayId: !Ref InternetGateway
-      VpcId: !Ref VPC
-
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
       AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: !Select [0, !Ref AirflowPrivateSubnetCidrBlocks]
-      VpcId: !Ref VPC
+      VpcId: !ImportValue Infra-VpcId
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
@@ -58,7 +34,7 @@ Resources:
     Properties:
       AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: !Select [1, !Ref AirflowPrivateSubnetCidrBlocks]
-      VpcId: !Ref VPC
+      VpcId: !ImportValue Infra-VpcId
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
@@ -69,7 +45,7 @@ Resources:
     Properties:
       AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: !Select [0, !Ref AirflowPublicSubnetCidrBlocks]
-      VpcId: !Ref VPC
+      VpcId: !ImportValue Infra-VpcId
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -80,7 +56,7 @@ Resources:
     Properties:
       AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: !Select [1, !Ref AirflowPublicSubnetCidrBlocks]
-      VpcId: !Ref VPC
+      VpcId: !ImportValue Infra-VpcId
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -111,7 +87,7 @@ Resources:
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref VPC
+      VpcId: !ImportValue Infra-VpcId
       Tags:
         - Key: Name
           Value: Airflow Public Routes
@@ -121,7 +97,7 @@ Resources:
     Properties:
       RouteTableId: !Ref PublicRouteTable
       DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref InternetGateway
+      GatewayId: !ImportValue Infra-InternetGatewayId
 
   PublicSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -138,7 +114,7 @@ Resources:
   PrivateRouteTable1:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref VPC
+      VpcId: !ImportValue Infra-VpcId
       Tags:
         - Key: Name
           Value: Airflow Private Routes (AZ1)
@@ -159,7 +135,7 @@ Resources:
   PrivateRouteTable2:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref VPC
+      VpcId: !ImportValue Infra-VpcId
       Tags:
         - Key: Name
           Value: Airflow Private Routes (AZ2)
@@ -182,51 +158,7 @@ Resources:
     Properties:
       GroupDescription: Airflow security group
       GroupName: airflow
-      VpcId: !Ref VPC
-
-  InfraBucket:
-    Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    Properties:
-      BucketName: !Sub infra.${AWS::Region}.${AWS::AccountId}.${Stage}
-      VersioningConfiguration:
-        Status: Enabled
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-
-  DataLakeBucket:
-    Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    Properties:
-      BucketName: !Sub data-lake.${AWS::Region}.${AWS::AccountId}.${Stage}
-      VersioningConfiguration:
-        Status: Enabled
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-
-  BucketWritePolicy:
-    Type: AWS::IAM::ManagedPolicy
-    DependsOn: InfraBucket
-    Properties:
-      PolicyDocument:
-        Version: 2012-10-17
-        Statement:
-          - Effect: Allow
-            Action:
-              - s3:PutObject*
-              - s3:DeleteObject
-              - s3:GetBucketLocation
-              - s3:GetObject
-              - s3:ListBucket
-            Resource:
-              - !GetAtt InfraBucket.Arn
-              - !Sub ${InfraBucket.Arn}/*
+      VpcId: !ImportValue Infra-VpcId
 
   AirflowKey:
     Type: AWS::KMS::Key
@@ -279,16 +211,24 @@ Resources:
           - Effect: Deny
             Action: s3:ListAllMyBuckets
             Resource:
-              - !Sub arn:aws:s3:::${InfraBucket}
-              - !Sub arn:aws:s3:::${InfraBucket}/airflow/*
+              - Fn::Sub:
+                - arn:aws:s3:::${InfraBucketName}
+                - InfraBucketName: !ImportValue Infra-InfraBucketName
+              - Fn::Sub:
+                  - arn:aws:s3:::${InfraBucketName}/airflow/*
+                  - InfraBucketName: !ImportValue Infra-InfraBucketName
           - Effect: Allow
             Action:
               - s3:GetObject*
               - s3:GetBucket*
               - s3:List*
             Resource:
-              - !Sub arn:aws:s3:::${InfraBucket}
-              - !Sub arn:aws:s3:::${InfraBucket}/airflow/*
+              - Fn::Sub:
+                  - arn:aws:s3:::${InfraBucketName}
+                  - InfraBucketName: !ImportValue Infra-InfraBucketName
+              - Fn::Sub:
+                - arn:aws:s3:::${InfraBucketName}/airflow/*
+                - InfraBucketName: !ImportValue Infra-InfraBucketName
           - Effect: Allow
             Action:
               - logs:CreateLogStream
@@ -373,7 +313,10 @@ Resources:
               - s3:ListBucket
               - s3:ListObjects
               - s3:PutObject*
-            Resource: !Sub ${InfraBucket.Arn}/athena-output/*
+            Resource:
+              Fn::Sub:
+                - ${InfraBucketArn}/athena-output/*
+                - InfraBucketArn: !ImportValue Infra-InfraBucketArn
 
   AirflowExecutionRole:
     Type: AWS::IAM::Role
@@ -400,10 +343,10 @@ Resources:
       Name: airflow
       EnvironmentClass: mw1.small
       MaxWorkers: 2
-      SourceBucketArn: !GetAtt InfraBucket.Arn
+      SourceBucketArn: !ImportValue Infra-InfraBucketArn
       DagS3Path: airflow/dags
       RequirementsS3Path: airflow/requirements.txt
-#      RequirementsS3ObjectVersion:
+      RequirementsS3ObjectVersion: !Ref RequirementsVersion
       ExecutionRoleArn: !GetAtt AirflowExecutionRole.Arn
       KmsKey: !Ref AirflowKey
       WebserverAccessMode: PUBLIC_ONLY
@@ -425,14 +368,6 @@ Resources:
           - !Ref NoIngressSecurityGroup
 
 Outputs:
-  InfraBucketName:
-    Description: Infra bucket
-    Value: !Ref InfraBucket
-    Export:
-      Name: !Sub ${AWS::StackName}-InfraBucket
-
-  DataLakeBucketName:
-    Description: Data lake bucket
-    Value: !Ref DataLakeBucket
-      Export:
-        Name: !Sub ${AWS::StackName}-DataLakeBucket
+  AirflowUI:
+    Description: Link to Airflow UI
+    Value: !GetAtt AirflowEnvironment.WebserverUrl

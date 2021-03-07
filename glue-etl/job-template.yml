@@ -58,7 +58,7 @@ Resources:
           Location:
             Fn::Sub:
               - s3://${DataLakeBucket}/${TableName}
-              - DataLakeBucket: !ImportValue Airflow-DataLakeBucket
+              - DataLakeBucket: !ImportValue Infra-DataLakeBucketName
           InputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat
           OutputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat
           SerdeInfo:
@@ -94,10 +94,7 @@ Resources:
                   - s3:ListBucket
                   - s3:GetBucketAcl
                   - s3:GetBucketLocation
-                Resource:
-                  Fn::Sub:
-                    - arn:aws:s3:::${DataLakeBucket}
-                    - DataLakeBucket: !ImportValue Airflow-DataLakeBucket
+                Resource: !ImportValue Infra-DataLakeBucketArn
               - Effect: Allow
                 Action:
                   - s3:PutObject
@@ -105,15 +102,15 @@ Resources:
                   - s3:DeleteObject
                 Resource:
                   Fn::Sub:
-                    - arn:aws:s3:::${DataLakeBucket}/*
-                    - DataLakeBucket: !ImportValue Airflow-DataLakeBucket
+                    - ${DataLakeBucketArn}/*
+                    - DataLakeBucketArn: !ImportValue Infra-DataLakeBucketArn
               - Effect: Allow
                 Action:
                   - s3:GetObject
                 Resource:
                   Fn::Sub:
-                    - arn:aws:s3:::${InfraBucket}/glue*
-                    - InfraBucket: !ImportValue Airflow-InfraBucket
+                    - ${InfraBucketArn}/glue*
+                    - InfraBucketArn: !ImportValue Infra-InfraBucketArn
   GlueJob:
     Type: AWS::Glue::Job
     Properties:
@@ -129,7 +126,7 @@ Resources:
         "--s3_location":
           Fn::Sub:
             - s3://${DataLakeBucket}/${TableName}
-            - DataLakeBucket: !ImportValue Airflow-DataLakeBucket
+            - DataLakeBucket: !ImportValue Infra-DataLakeBucketName
               TableName: !Ref TableName
         "--table_throughput_read_percent": !Ref TableThroughputReadPercent
         "--workers": !Ref AllocatedCapacity

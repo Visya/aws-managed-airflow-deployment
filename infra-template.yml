@@ -1,0 +1,114 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: Base infra
+
+Parameters:
+  VpcCidr:
+    Description: VPC CIDR block
+    Type: String
+    Default: 10.192.0.0/16
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: Airflow VPC
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: Airflow IG
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  InfraBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: !Sub infra.${AWS::Region}.${AWS::AccountId}
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  DataLakeBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: !Sub data-lake.${AWS::Region}.${AWS::AccountId}
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  BucketWritePolicy:
+    Type: AWS::IAM::ManagedPolicy
+    DependsOn: InfraBucket
+    Properties:
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:PutObject*
+              - s3:DeleteObject
+              - s3:GetBucketLocation
+              - s3:GetObject
+              - s3:ListBucket
+            Resource:
+              - !GetAtt InfraBucket.Arn
+              - !Sub ${InfraBucket.Arn}/*
+
+Outputs:
+  VpcId:
+    Description: Main VPC id
+    Value: !Ref VPC
+    Export:
+      Name: ${AWS::StackName}-VpcId
+
+  InternetGatewayId:
+    Description: Main internet gateway id
+    Value: !Ref InternetGateway
+    Export:
+      Name: ${AWS::StackName}-InternetGatewayId
+
+  InfraBucketName:
+    Description: Infra bucket name
+    Value: !Ref InfraBucket
+    Export:
+      Name: !Sub ${AWS::StackName}-InfraBucketName
+
+  InfraBucketArn:
+    Description: Infra bucket ARN
+    Value: !GetAtt InfraBucket.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-InfraBucketArn
+
+  DataLakeBucketName:
+    Description: Data lake bucket name
+    Value: !Ref DataLakeBucket
+      Export:
+        Name: !Sub ${AWS::StackName}-DataLakeBucketName
+
+  DataLakeBucketArn:
+    Description: Data lake bucket ARN
+    Value: !GetAtt DataLakeBucket.Arn
+      Export:
+        Name: !Sub ${AWS::StackName}-DataLakeBucketArn
