@@ -1,0 +1,6 @@
+{
+  "glue_db": "",
+  "data_lake_bucket": "",
+  "infra_bucket": "",
+  "region": "eu-west-1"
+}

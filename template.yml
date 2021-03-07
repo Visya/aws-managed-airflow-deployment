@@ -1,0 +1,438 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: Airflow environment
+
+Parameters:
+  VpcCidr:
+    Description: VPC CIDR block
+    Type: String
+    Default: 10.192.0.0/16
+
+  AirflowPrivateSubnetCidrBlocks:
+    Description: Comma delimited list of CIDR blocks which should be chosen for creating private Airflow subnets.
+    Type: CommaDelimitedList
+    Default: 10.192.10.0/24, 10.192.11.0/24
+
+  AirflowPublicSubnetCidrBlocks:
+    Description: Comma delimited list of CIDR blocks which should be chosen for creating public Airflow subnets.
+    Type: CommaDelimitedList
+    Default: 10.192.20.0/24, 10.192.21.0/24
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: Airflow VPC
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: Airflow IG
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !Select [0, !Ref AirflowPrivateSubnetCidrBlocks]
+      VpcId: !Ref VPC
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: Airflow Private Subnet(AZ1)
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !Select [1, !Ref AirflowPrivateSubnetCidrBlocks]
+      VpcId: !Ref VPC
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: Airflow Private Subnet(AZ2)
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !Select [0, !Ref AirflowPublicSubnetCidrBlocks]
+      VpcId: !Ref VPC
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: Airflow Public Subnet(AZ1)
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !Select [1, !Ref AirflowPublicSubnetCidrBlocks]
+      VpcId: !Ref VPC
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: Airflow Public Subnet(AZ2)
+
+  NatGateway1EIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  NatGateway2EIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  NatGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway1EIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+
+  NatGateway2:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway2EIP.AllocationId
+      SubnetId: !Ref PublicSubnet2
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: Airflow Public Routes
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: Airflow Private Routes (AZ1)
+
+  DefaultPrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway1
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      SubnetId: !Ref PrivateSubnet1
+
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: Airflow Private Routes (AZ2)
+
+  DefaultPrivateRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway2
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      SubnetId: !Ref PrivateSubnet2
+
+  NoIngressSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Airflow security group
+      GroupName: airflow
+      VpcId: !Ref VPC
+
+  InfraBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: !Sub infra.${AWS::Region}.${AWS::AccountId}.${Stage}
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  DataLakeBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: !Sub data-lake.${AWS::Region}.${AWS::AccountId}.${Stage}
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  BucketWritePolicy:
+    Type: AWS::IAM::ManagedPolicy
+    DependsOn: InfraBucket
+    Properties:
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:PutObject*
+              - s3:DeleteObject
+              - s3:GetBucketLocation
+              - s3:GetObject
+              - s3:ListBucket
+            Resource:
+              - !GetAtt InfraBucket.Arn
+              - !Sub ${InfraBucket.Arn}/*
+
+  AirflowKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: Encryption key for Airflow environment
+      Enabled: true
+      EnableKeyRotation: true
+      PendingWindowInDays: 7
+      KeyPolicy:
+        Version: 2012-10-17
+        Id: airflowKey
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: kms:*
+            Resource: '*'
+          - Sid: Allow logs access
+            Effect: Allow
+            Principal:
+              Service: !Sub logs.${AWS::Region}.amazonaws.com
+            Action:
+              - kms:Encrypt*
+              - kms:Decrypt*
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:Describe*
+            Resource: '*'
+            Condition:
+              ArnLike:
+                kms:EncryptionContext:aws:logs:arn: !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*
+
+  AirflowKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: alias/airflowKey
+      TargetKeyId: !Ref AirflowKey
+
+  AirflowExecutionPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Airflow execution policy
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action: airflow:PublishMetrics
+            Resource: !Sub arn:aws:airflow:${AWS::Region}:${AWS::AccountId}:environment/airflow
+          - Effect: Deny
+            Action: s3:ListAllMyBuckets
+            Resource:
+              - !Sub arn:aws:s3:::${InfraBucket}
+              - !Sub arn:aws:s3:::${InfraBucket}/airflow/*
+          - Effect: Allow
+            Action:
+              - s3:GetObject*
+              - s3:GetBucket*
+              - s3:List*
+            Resource:
+              - !Sub arn:aws:s3:::${InfraBucket}
+              - !Sub arn:aws:s3:::${InfraBucket}/airflow/*
+          - Effect: Allow
+            Action:
+              - logs:CreateLogStream
+              - logs:CreateLogGroup
+              - logs:PutLogEvents
+              - logs:GetLogEvents
+              - logs:GetLogRecord
+              - logs:GetLogGroupFields
+              - logs:GetQueryResults
+            Resource: !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:airflow-airflow-*
+          - Effect: Allow
+            Action: logs:DescribeLogGroups
+            Resource: "*"
+          - Effect: Allow
+            Action: cloudwatch:PutMetricData
+            Resource: "*"
+          - Effect: Allow
+            Action:
+              - sqs:ChangeMessageVisibility
+              - sqs:DeleteMessage
+              - sqs:GetQueueAttributes
+              - sqs:GetQueueUrl
+              - sqs:ReceiveMessage
+              - sqs:SendMessage
+            Resource: !Sub arn:aws:sqs:${AWS::Region}:*:airflow-celery-*
+          - Effect: Allow
+            Action:
+              - kms:Decrypt
+              - kms:DescribeKey
+              - kms:GenerateDataKey*
+              - kms:Encrypt
+            Resource: !GetAtt AirflowKey.Arn
+            Condition:
+              StringLike:
+                kms:ViaService:
+                  - !Sub sqs.${AWS::Region}.amazonaws.com
+                  - !Sub s3.${AWS::Region}.amazonaws.com
+
+  AirflowDagPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Policy that allows Airflow DAGs to use Athena and Glue Jobs
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - athena:BatchGetQueryExecution
+              - athena:GetQueryExecution
+              - athena:GetQueryResults
+              - athena:ListQueryExecutions
+              - athena:StartQueryExecution
+              - athena:StopQueryExecution
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - glue:GetDatabase
+              - glue:GetDatabases
+              - glue:UpdateDatabase
+              - glue:CreateTable
+              - glue:DeleteTable
+              - glue:BatchDeleteTable
+              - glue:UpdateTable
+              - glue:GetTable
+              - glue:GetTables
+              - glue:BatchCreatePartition
+              - glue:CreatePartition
+              - glue:DeletePartition
+              - glue:BatchDeletePartition
+              - glue:UpdatePartition
+              - glue:GetPartition
+              - glue:GetPartitions
+              - glue:BatchGetPartition
+              - glue:StartJobRun
+              - glue:GetJob*
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - s3:DeleteObject
+              - s3:GetBucketLocation
+              - s3:GetObject
+              - s3:ListBucket
+              - s3:ListObjects
+              - s3:PutObject*
+            Resource: !Sub ${InfraBucket.Arn}/athena-output/*
+
+  AirflowExecutionRole:
+    Type: AWS::IAM::Role
+    DependsOn: AirflowExecutionPolicy
+    Properties:
+      Description: Allows access to AWS resource from Airflow environment.
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - airflow-env.amazonaws.com
+                - airflow.amazonaws.com
+            Action: sts:AssumeRole
+      MaxSessionDuration: 3600
+      ManagedPolicyArns:
+        - !Ref AirflowExecutionPolicy
+        - !Ref AirflowDagPolicy
+
+  AirflowEnvironment:
+    Type: AWS::MWAA::Environment
+    Properties:
+      Name: airflow
+      EnvironmentClass: mw1.small
+      MaxWorkers: 2
+      SourceBucketArn: !GetAtt InfraBucket.Arn
+      DagS3Path: airflow/dags
+      RequirementsS3Path: airflow/requirements.txt
+#      RequirementsS3ObjectVersion:
+      ExecutionRoleArn: !GetAtt AirflowExecutionRole.Arn
+      KmsKey: !Ref AirflowKey
+      WebserverAccessMode: PUBLIC_ONLY
+      LoggingConfiguration:
+        DagProcessingLogs:
+          Enabled: true
+          LogLevel: WARNING
+        TaskLogs:
+          Enabled: true
+          LogLevel: INFO
+        SchedulerLogs:
+          Enabled: true
+          LogLevel: INFO
+      NetworkConfiguration:
+        SubnetIds:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+        SecurityGroupIds:
+          - !Ref NoIngressSecurityGroup
+
+Outputs:
+  InfraBucketName:
+    Description: Infra bucket
+    Value: !Ref InfraBucket
+    Export:
+      Name: !Sub ${AWS::StackName}-InfraBucket
+
+  DataLakeBucketName:
+    Description: Data lake bucket
+    Value: !Ref DataLakeBucket
+      Export:
+        Name: !Sub ${AWS::StackName}-DataLakeBucket
