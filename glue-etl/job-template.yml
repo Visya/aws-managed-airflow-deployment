@@ -119,7 +119,7 @@ Resources:
       Role: !GetAtt GlueRole.Arn
       Command:
         Name: glueetl
-        ScriptLocation: ./dynamodb_export_script.py
+        ScriptLocation: dynamodb-export-script.py
         PythonVersion: 3
       DefaultArguments:
         "--table_name": !Ref TestDynamodbTable
