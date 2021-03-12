@@ -11,6 +11,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       airflow-ui: ${{ steps.airflow-stack.outputs.AirflowUI }}
+    env:
+      REGION: eu-west-1
     steps:
     - name: checkout
       uses: actions/checkout@v2
@@ -21,7 +23,7 @@ jobs:
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: eu-west-1
+        aws-region: ${{ env.REGION }}
 
     - name: Deploy main infra stack
       id: infra-stack
@@ -53,10 +55,20 @@ jobs:
         parameter-overrides: >-
           RequirementsVersion=${{ steps.requirements.outputs.version }}
 
+    - name: Package Glue Job stack
+      id: glue-job-stack-package
+      run: >
+        aws cloudformation package
+        --region $REGION
+        --s3-bucket ${{ steps.infra-stack.outputs.InfraBucketName }}
+        --s3-prefix glue-etl
+        --output-template packaged-job-template.yml
+        --template-file glue-etl/job-template.yml
+
     - name: Deploy Glue Job
       id: glue-job-stack
       uses: aws-actions/aws-cloudformation-github-deploy@v1
       with:
         name: DynamoDbToS3EtlJob
-        template: glue-etl/job-template.yml
+        template: packaged-job-template.yml
         no-fail-on-empty-changeset: '1'
