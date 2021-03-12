@@ -14,7 +14,7 @@ Parameters:
     Default: 10.192.20.0/24, 10.192.21.0/24
 
   RequirementsVersion:
-    Description: Latest version of reqiurements.txt file
+    Description: Latest version of requirements.txt file
     Type: String
 
 Resources:

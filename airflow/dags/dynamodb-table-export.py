@@ -32,7 +32,7 @@ with DAG(
     schedule_interval=timedelta(days=1),
     start_date=days_ago(1),
     params={
-        "athena_output_location": f"s3://{infra_bucket}/thena-output/{table}",
+        "athena_output_location": f"s3://{infra_bucket}/athena-output/{table}",
         "table": table
     }
 ) as dag:
