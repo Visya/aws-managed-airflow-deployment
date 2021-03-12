@@ -153,12 +153,21 @@ Resources:
       RouteTableId: !Ref PrivateRouteTable2
       SubnetId: !Ref PrivateSubnet2
 
-  NoIngressSecurityGroup:
+  SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Airflow security group
       GroupName: airflow
       VpcId: !ImportValue Infra-VpcId
+
+  SecurityGroupSelfIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref SecurityGroup
+      IpProtocol: -1
+      FromPort: -1
+      ToPort: -1
+      SourceSecurityGroupId: !GetAtt SecurityGroup.GroupId
 
   AirflowKey:
     Type: AWS::KMS::Key
@@ -365,7 +374,7 @@ Resources:
           - !Ref PrivateSubnet1
           - !Ref PrivateSubnet2
         SecurityGroupIds:
-          - !Ref NoIngressSecurityGroup
+          - !Ref SecurityGroup
 
 Outputs:
   AirflowUI:
