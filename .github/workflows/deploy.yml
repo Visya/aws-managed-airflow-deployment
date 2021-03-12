@@ -34,7 +34,7 @@ jobs:
     - name: Deploy Airflow artifacts
       id: airflow-artifacts
       run: |
-        aws s3 sync airflow s3://${{ steps.infra-stack.outputs.InfraBucketName }}/airflow --delete
+        aws s3 sync airflow s3://${{ steps.infra-stack.outputs.InfraBucketName }}/airflow --delete --size-only
 
     - name: Get latest requirements version
       id: requirements
