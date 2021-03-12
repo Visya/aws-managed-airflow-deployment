@@ -215,7 +215,7 @@ Resources:
                 - arn:aws:s3:::${InfraBucketName}
                 - InfraBucketName: !ImportValue Infra-InfraBucketName
               - Fn::Sub:
-                  - arn:aws:s3:::${InfraBucketName}/airflow/*
+                  - arn:aws:s3:::${InfraBucketName}/*
                   - InfraBucketName: !ImportValue Infra-InfraBucketName
           - Effect: Allow
             Action:
@@ -227,7 +227,7 @@ Resources:
                   - arn:aws:s3:::${InfraBucketName}
                   - InfraBucketName: !ImportValue Infra-InfraBucketName
               - Fn::Sub:
-                - arn:aws:s3:::${InfraBucketName}/airflow/*
+                - arn:aws:s3:::${InfraBucketName}/*
                 - InfraBucketName: !ImportValue Infra-InfraBucketName
           - Effect: Allow
             Action:

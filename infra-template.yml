@@ -34,7 +34,6 @@ Resources:
 
   InfraBucket:
     Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
     Properties:
       BucketName: !Sub infra.${AWS::Region}.${AWS::AccountId}
       VersioningConfiguration:
@@ -47,7 +46,6 @@ Resources:
 
   DataLakeBucket:
     Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
     Properties:
       BucketName: !Sub data-lake.${AWS::Region}.${AWS::AccountId}
       VersioningConfiguration:
@@ -81,13 +79,13 @@ Outputs:
     Description: Main VPC id
     Value: !Ref VPC
     Export:
-      Name: ${AWS::StackName}-VpcId
+      Name: !Sub ${AWS::StackName}-VpcId
 
   InternetGatewayId:
     Description: Main internet gateway id
     Value: !Ref InternetGateway
     Export:
-      Name: ${AWS::StackName}-InternetGatewayId
+      Name: !Sub ${AWS::StackName}-InternetGatewayId
 
   InfraBucketName:
     Description: Infra bucket name
@@ -104,11 +102,11 @@ Outputs:
   DataLakeBucketName:
     Description: Data lake bucket name
     Value: !Ref DataLakeBucket
-      Export:
-        Name: !Sub ${AWS::StackName}-DataLakeBucketName
+    Export:
+      Name: !Sub ${AWS::StackName}-DataLakeBucketName
 
   DataLakeBucketArn:
     Description: Data lake bucket ARN
     Value: !GetAtt DataLakeBucket.Arn
-      Export:
-        Name: !Sub ${AWS::StackName}-DataLakeBucketArn
+    Export:
+      Name: !Sub ${AWS::StackName}-DataLakeBucketArn
