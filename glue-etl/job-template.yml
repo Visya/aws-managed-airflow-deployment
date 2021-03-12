@@ -49,7 +49,7 @@ Resources:
       DatabaseName: !Ref GlueDataLakeDb
       CatalogId: !Ref AWS::AccountId
       TableInput:
-        Name: product
+        Name: test_table
         Parameters: { classification: parquet }
         TableType: EXTERNAL_TABLE
         PartitionKeys:
