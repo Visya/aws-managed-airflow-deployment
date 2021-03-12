@@ -12,10 +12,11 @@ default_args = {
     "sla": timedelta(hours=1),
 }
 
-region = Variable.get("region")
-data_lake_bucket = Variable.get("data_lake_bucket")
-infra_bucket = Variable.get("infra_bucket")
-glue_db = Variable.get("glue_db")
+config = Variable.get("config", deserialize_json=True)
+region = config["region"]
+data_lake_bucket = config["data_lake_bucket"]
+infra_bucket = config["infra_bucket"]
+glue_db = config["glue_db"]
 table = "test_table"
 
 
